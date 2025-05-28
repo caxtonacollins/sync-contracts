@@ -8,26 +8,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - uses: software-mansion/setup-scarb@v1
         with:
           scarb-version: 2.11.4
-      - name: Check cairo format
-        working-directory: contracts
-        run: scarb fmt --check
-      - name: Build cairo programs
-        working-directory: contracts
-        run: scarb build
+
+      - name: Format and Build All Cairo Projects
+        run: |
+          for dir in contracts/*/; do
+            if [ -f "${dir}Scarb.toml" ]; then
+              echo "📁 Found package in: $dir"
+
+              echo "🎯 Checking format in: $dir"
+              (cd "$dir" && scarb fmt)
+
+              echo "🔨 Building in: $dir"
+              (cd "$dir" && scarb build)
+            else
+              echo "⚠️ Skipping $dir — No Scarb.toml found"
+            fi
+          done
 
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - uses: software-mansion/setup-scarb@v1
         with:
           scarb-version: 2.11.4
+
       - uses: foundry-rs/setup-snfoundry@v3
         with:
           starknet-foundry-version: 0.43.0
-      - name: Run cairo tests
-        working-directory: contracts
-        run: snforge test
+
+      - name: Run All Tests with snforge
+        run: |
+          for dir in contracts/*/; do
+            if [ -f "${dir}Scarb.toml" ]; then
+              echo "🧪 Running tests in: $dir"
+              (cd "$dir" && snforge test)
+            fi
+          done
