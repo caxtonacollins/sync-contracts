@@ -1,4 +1,3 @@
-use account::contract::account::Account;
 use account::interfaces::Iaccount::{
     IaccountDispatcher, IaccountDispatcherTrait, IaccountSafeDispatcher,
     IaccountSafeDispatcherTrait,
@@ -12,12 +11,13 @@ use starknet::{ContractAddress, contract_address_const};
 
 fn setup() -> (ContractAddress, ContractAddress) {
     let admin_address: ContractAddress = contract_address_const::<'1'>();
+    let public_key: felt252 = 'TEST_PUBLIC_KEY';
 
     let declare_result = declare("Account");
     assert(declare_result.is_ok(), 'contract decleration failed');
 
     let contract_class = declare_result.unwrap().contract_class();
-    let mut calldata = array![admin_address.into()];
+    let mut calldata = array![public_key];
 
     let deploy_result = contract_class.deploy(@calldata);
     assert(deploy_result.is_ok(), 'contract deployment failed');

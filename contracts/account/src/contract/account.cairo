@@ -1,88 +1,73 @@
 // SPDX-License-Identifier: MIT
-// Compatible with OpenZeppelin Contracts for Cairo ^1.0.0
+// Compatible with OpenZeppelin Contracts for Cairo 2.0.0-alpha.1
 
-const PAUSER_ROLE: felt252 = selector!("PAUSER_ROLE");
-const UPGRADER_ROLE: felt252 = selector!("UPGRADER_ROLE");
-
-#[starknet::contract]
-pub mod Account {
+#[starknet::contract(account)]
+mod Account {
     use account::interfaces::Iaccount::Iaccount;
-    use openzeppelin::access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_ROLE};
+    use openzeppelin::account::AccountComponent;
+    use openzeppelin::account::extensions::SRC9Component;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::security::pausable::PausableComponent;
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
-    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
-    use starknet::{ClassHash, ContractAddress};
-    use super::{PAUSER_ROLE, UPGRADER_ROLE};
+    use starknet::storage::{
+        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess,
+    };
+    use starknet::{ClassHash, ContractAddress, get_caller_address};
 
-    component!(path: PausableComponent, storage: pausable, event: PausableEvent);
-    component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
+
+    component!(path: AccountComponent, storage: account, event: AccountEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
+    component!(path: SRC9Component, storage: src9, event: SRC9Event);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
     // External
     #[abi(embed_v0)]
-    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
+    impl AccountMixinImpl = AccountComponent::AccountMixinImpl<ContractState>;
     #[abi(embed_v0)]
-    impl AccessControlMixinImpl =
-        AccessControlComponent::AccessControlMixinImpl<ContractState>;
+    impl OutsideExecutionV2Impl =
+        SRC9Component::OutsideExecutionV2Impl<ContractState>;
 
     // Internal
-    impl PausableInternalImpl = PausableComponent::InternalImpl<ContractState>;
-    impl AccessControlInternalImpl = AccessControlComponent::InternalImpl<ContractState>;
+    impl AccountInternalImpl = AccountComponent::InternalImpl<ContractState>;
+    impl OutsideExecutionInternalImpl = SRC9Component::InternalImpl<ContractState>;
     impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[storage]
     struct Storage {
         #[substorage(v0)]
-        pausable: PausableComponent::Storage,
-        #[substorage(v0)]
-        accesscontrol: AccessControlComponent::Storage,
+        account: AccountComponent::Storage,
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         #[substorage(v0)]
+        src9: SRC9Component::Storage,
+        #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
-        // contract storage
-        balance: felt252,
+        // Custom storage for SyncPayment functionality
+        fiat_balance: Map<(ContractAddress, felt252), u128>, // (user, currency) => balance
+        token_address: Map<felt252, ContractAddress>, // symbol => token_address
+        default_fiat_currency: felt252,
+        liquidity_bridge: ContractAddress,
+        initialized: bool,
     }
 
     #[event]
     #[derive(Drop, starknet::Event)]
     enum Event {
         #[flat]
-        PausableEvent: PausableComponent::Event,
-        #[flat]
-        AccessControlEvent: AccessControlComponent::Event,
+        AccountEvent: AccountComponent::Event,
         #[flat]
         SRC5Event: SRC5Component::Event,
+        #[flat]
+        SRC9Event: SRC9Component::Event,
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, default_admin: ContractAddress) {
-        self.accesscontrol.initializer();
-
-        self.accesscontrol._grant_role(DEFAULT_ADMIN_ROLE, default_admin);
-        self.accesscontrol._grant_role(PAUSER_ROLE, default_admin);
-        self.accesscontrol._grant_role(UPGRADER_ROLE, default_admin);
-    }
-
-    #[generate_trait]
-    #[abi(per_item)]
-    impl ExternalImpl of ExternalTrait {
-        #[external(v0)]
-        fn pause(ref self: ContractState) {
-            self.accesscontrol.assert_only_role(PAUSER_ROLE);
-            self.pausable.pause();
-        }
-
-        #[external(v0)]
-        fn unpause(ref self: ContractState) {
-            self.accesscontrol.assert_only_role(PAUSER_ROLE);
-            self.pausable.unpause();
-        }
+    fn constructor(ref self: ContractState, public_key: felt252) {
+        self.account.initializer(public_key);
+        self.src9.initializer();
     }
 
     //
@@ -92,23 +77,30 @@ pub mod Account {
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
-            self.accesscontrol.assert_only_role(UPGRADER_ROLE);
+            self.account.assert_only_self();
             self.upgradeable.upgrade(new_class_hash);
         }
     }
+
 
     // contract impl
     #[abi(embed_v0)]
     impl AccountImpl of Iaccount<ContractState> {
         fn increase_balance(ref self: ContractState, amount: felt252) {
-            //  only the default admin can call this function
-            self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
             assert(amount != 0, 'Amount cannot be 0');
-            self.balance.write(self.balance.read() + amount);
+            let caller = get_caller_address();
+            let currency = self.default_fiat_currency.read();
+            let current_balance = self.fiat_balance.read((caller, currency));
+
+            self
+                .fiat_balance
+                .write((caller, currency), current_balance + amount.try_into().unwrap());
         }
 
         fn get_balance(self: @ContractState) -> felt252 {
-            self.balance.read()
+            let caller = get_caller_address();
+            let currency = self.default_fiat_currency.read();
+            self.fiat_balance.read((caller, currency)).into()
         }
     }
 }
