@@ -14,7 +14,7 @@ mod Account {
         StoragePointerWriteAccess,
     };
     use starknet::{ClassHash, ContractAddress, get_caller_address};
-    use openzeppelin::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
 
     component!(path: AccountComponent, storage: account, event: AccountEvent);
@@ -50,6 +50,8 @@ mod Account {
         default_fiat_currency: felt252,
         liquidity_bridge: ContractAddress,
         initialized: bool,
+        public_key: felt252,
+        approved_tokens: Map<felt252, ContractAddress>, // symbol => token_address
     }
 
     #[event]
@@ -63,8 +65,6 @@ mod Account {
         SRC9Event: SRC9Component::Event,
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
-        #[flat]
-        TokenApproved: TokenApproved,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -115,24 +115,26 @@ mod Account {
         }
 
         fn initialize(ref self: ContractState, public_key: felt252, liquidity_bridge: ContractAddress) {
+            assert(!self.initialized.read(), 'Already initialized');
             self.public_key.write(public_key);
             self.liquidity_bridge.write(liquidity_bridge);
+            self.initialized.write(true);
         }
 
         fn approve_token(ref self: ContractState, symbol: felt252, token_address: ContractAddress) {
-            // Store the approved token
+            self.account.assert_only_self();
+            assert(self.initialized.read(), 'Not initialized');
+            assert(self.approved_tokens.read(symbol) == 0.try_into().unwrap(), 'Token already approved');
+            assert(token_address != 0.try_into().unwrap(), 'Token address cannot be 0');
+
             self.approved_tokens.write(symbol, token_address);
             
-            // Get the liquidity bridge address
             let bridge_address = self.liquidity_bridge.read();
             
-            // Create dispatcher for the token contract
             let token_dispatcher = IERC20Dispatcher { contract_address: token_address };
             
-            // Approve maximum amount to the liquidity bridge
             token_dispatcher.approve(bridge_address, 10000000000000000000);
             
-            // Emit event
             self.emit(TokenApproved {
                 user: get_caller_address(),
                 symbol,
