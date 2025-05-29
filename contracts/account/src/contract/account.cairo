@@ -65,6 +65,7 @@ mod Account {
         SRC9Event: SRC9Component::Event,
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
+        TokenApproved: TokenApproved,
     }
 
     #[derive(Drop, starknet::Event)]
