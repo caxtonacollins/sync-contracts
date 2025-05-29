@@ -14,6 +14,7 @@ mod Account {
         StoragePointerWriteAccess,
     };
     use starknet::{ClassHash, ContractAddress, get_caller_address};
+    use openzeppelin::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
 
     component!(path: AccountComponent, storage: account, event: AccountEvent);
@@ -62,6 +63,16 @@ mod Account {
         SRC9Event: SRC9Component::Event,
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
+        #[flat]
+        TokenApproved: TokenApproved,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct TokenApproved {
+        pub user: ContractAddress,
+        pub symbol: felt252,
+        pub token_address: ContractAddress,
+        pub amount: u128,
     }
 
     #[constructor]
@@ -101,6 +112,33 @@ mod Account {
             let caller = get_caller_address();
             let currency = self.default_fiat_currency.read();
             self.fiat_balance.read((caller, currency)).into()
+        }
+
+        fn initialize(ref self: ContractState, public_key: felt252, liquidity_bridge: ContractAddress) {
+            self.public_key.write(public_key);
+            self.liquidity_bridge.write(liquidity_bridge);
+        }
+
+        fn approve_token(ref self: ContractState, symbol: felt252, token_address: ContractAddress) {
+            // Store the approved token
+            self.approved_tokens.write(symbol, token_address);
+            
+            // Get the liquidity bridge address
+            let bridge_address = self.liquidity_bridge.read();
+            
+            // Create dispatcher for the token contract
+            let token_dispatcher = IERC20Dispatcher { contract_address: token_address };
+            
+            // Approve maximum amount to the liquidity bridge
+            token_dispatcher.approve(bridge_address, 10000000000000000000);
+            
+            // Emit event
+            self.emit(TokenApproved {
+                user: get_caller_address(),
+                symbol,
+                token_address,
+                amount: 10000000000000000000,
+            });
         }
     }
 }
