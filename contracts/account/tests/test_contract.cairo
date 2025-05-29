@@ -1,26 +1,48 @@
-use account::{
-    IHelloStarknetDispatcher, IHelloStarknetDispatcherTrait, IHelloStarknetSafeDispatcher,
-    IHelloStarknetSafeDispatcherTrait,
+use account::interfaces::Iaccount::{
+    IaccountDispatcher, IaccountDispatcherTrait, IaccountSafeDispatcher,
+    IaccountSafeDispatcherTrait,
 };
-use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
-use starknet::ContractAddress;
+use snforge_std::{
+    ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
+    stop_cheat_caller_address,
+};
+use starknet::{ContractAddress, contract_address_const};
 
-fn deploy_contract(name: ByteArray) -> ContractAddress {
-    let contract = declare(name).unwrap().contract_class();
-    let (contract_address, _) = contract.deploy(@ArrayTrait::new()).unwrap();
-    contract_address
+
+fn setup() -> (ContractAddress, ContractAddress) {
+    let admin_address: ContractAddress = contract_address_const::<'1'>();
+    let public_key: felt252 = 'TEST_PUBLIC_KEY';
+
+    let declare_result = declare("Account");
+    assert(declare_result.is_ok(), 'contract decleration failed');
+
+    let contract_class = declare_result.unwrap().contract_class();
+    let mut calldata = array![public_key];
+
+    let deploy_result = contract_class.deploy(@calldata);
+    assert(deploy_result.is_ok(), 'contract deployment failed');
+
+    let (contract_address, _) = deploy_result.unwrap();
+
+    (contract_address, admin_address)
 }
+
 
 #[test]
 fn test_increase_balance() {
-    let contract_address = deploy_contract("HelloStarknet");
+    let (contract_address, admin_address_) = setup();
+    let owner = contract_address_const::<'1'>();
 
-    let dispatcher = IHelloStarknetDispatcher { contract_address };
+    let dispatcher = IaccountDispatcher { contract_address };
+
+    start_cheat_caller_address(dispatcher.contract_address, owner);
 
     let balance_before = dispatcher.get_balance();
     assert(balance_before == 0, 'Invalid balance');
 
     dispatcher.increase_balance(42);
+
+    stop_cheat_caller_address(owner);
 
     let balance_after = dispatcher.get_balance();
     assert(balance_after == 42, 'Invalid balance');
@@ -29,9 +51,14 @@ fn test_increase_balance() {
 #[test]
 #[feature("safe_dispatcher")]
 fn test_cannot_increase_balance_with_zero_value() {
-    let contract_address = deploy_contract("HelloStarknet");
+    let (contract_address, admin_address_) = setup();
+    let owner = contract_address_const::<'1'>();
 
-    let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
+    let dispatcher = IaccountDispatcher { contract_address };
+
+    start_cheat_caller_address(dispatcher.contract_address, owner);
+
+    let safe_dispatcher = IaccountSafeDispatcher { contract_address };
 
     let balance_before = safe_dispatcher.get_balance().unwrap();
     assert(balance_before == 0, 'Invalid balance');
