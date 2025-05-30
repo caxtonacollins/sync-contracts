@@ -16,7 +16,6 @@ mod Account {
     use starknet::{ClassHash, ContractAddress, get_caller_address};
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
-
     component!(path: AccountComponent, storage: account, event: AccountEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: SRC9Component, storage: src9, event: SRC9Event);
@@ -66,6 +65,8 @@ mod Account {
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
         TokenApproved: TokenApproved,
+        FiatDeposit: FiatDeposit,
+        FiatWithdrawal: FiatWithdrawal,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -74,6 +75,21 @@ mod Account {
         pub symbol: felt252,
         pub token_address: ContractAddress,
         pub amount: u128,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct FiatDeposit {
+        pub user: ContractAddress,
+        pub currency: felt252,
+        pub amount: u128,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct FiatWithdrawal {
+        pub account_address: ContractAddress,
+        pub currency: felt252,
+        pub amount: u128,
+        pub recipient: ContractAddress,
     }
 
     #[constructor]
@@ -161,4 +177,3 @@ mod Account {
         }
     }
 }
-
