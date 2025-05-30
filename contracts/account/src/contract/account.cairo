@@ -143,6 +143,22 @@ mod Account {
                 amount: 10000000000000000000,
             });
         }
+
+        fn get_liquidity_bridge(self: @ContractState) -> ContractAddress {
+            self.liquidity_bridge.read()
+        }
+
+        fn get_key_public(self: @ContractState) -> felt252 {
+            self.public_key.read()
+        }
+
+        fn get_approved_token(self: @ContractState, symbol: felt252) -> ContractAddress {
+            self.approved_tokens.read(symbol)
+        }
+
+        fn get_initialized_status(self: @ContractState) -> bool {
+            self.initialized.read()
+        }
     }
 }
 
