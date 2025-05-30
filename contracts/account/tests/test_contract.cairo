@@ -8,7 +8,7 @@ use snforge_std::{
 };
 use starknet::{ContractAddress, contract_address_const};
 
-
+#[feature("deprecated-starknet-consts")]
 fn setup() -> (ContractAddress, ContractAddress) {
     let admin_address: ContractAddress = contract_address_const::<'1'>();
     let public_key: felt252 = 'TEST_PUBLIC_KEY';
@@ -30,7 +30,7 @@ fn setup() -> (ContractAddress, ContractAddress) {
 
 #[test]
 fn test_increase_balance() {
-    let (contract_address, admin_address_) = setup();
+    let (contract_address, _) = setup();
     let owner = contract_address_const::<'1'>();
 
     let dispatcher = IaccountDispatcher { contract_address };
@@ -51,7 +51,7 @@ fn test_increase_balance() {
 #[test]
 #[feature("safe_dispatcher")]
 fn test_cannot_increase_balance_with_zero_value() {
-    let (contract_address, admin_address_) = setup();
+    let (contract_address, _) = setup();
     let owner = contract_address_const::<'1'>();
 
     let dispatcher = IaccountDispatcher { contract_address };
