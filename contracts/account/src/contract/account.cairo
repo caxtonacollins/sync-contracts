@@ -110,7 +110,6 @@ mod Account {
         }
     }
 
-
     // contract impl
     #[abi(embed_v0)]
     impl AccountImpl of Iaccount<ContractState> {
@@ -174,6 +173,25 @@ mod Account {
 
         fn get_initialized_status(self: @ContractState) -> bool {
             self.initialized.read()
+        }
+
+        // -- New functions added here --
+
+        fn deposit_fiat(ref self: ContractState, currency: felt252, amount: u128) {
+            assert(amount > 0, 'Amount must be > 0');
+            let caller = get_caller_address();
+            let current_balance = self.fiat_balance.read((caller, currency));
+            self.fiat_balance.write((caller, currency), current_balance + amount);
+            self.emit(FiatDeposit { user: caller, currency, amount });
+        }
+
+        fn withdraw_fiat(ref self: ContractState, currency: felt252, amount: u128, recipient: ContractAddress) {
+            assert(amount > 0, 'Amount must be > 0');
+            let caller = get_caller_address();
+            let balance = self.fiat_balance.read((caller, currency));
+            assert(balance >= amount, 'Insufficient balance');
+            self.fiat_balance.write((caller, currency), balance - amount);
+            self.emit(FiatWithdrawal { account_address: caller, currency, amount, recipient });
         }
     }
 }
