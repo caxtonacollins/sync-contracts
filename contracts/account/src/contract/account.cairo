@@ -16,7 +16,6 @@ mod Account {
     use starknet::{ClassHash, ContractAddress, get_caller_address};
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
-
     component!(path: AccountComponent, storage: account, event: AccountEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: SRC9Component, storage: src9, event: SRC9Event);
@@ -26,8 +25,7 @@ mod Account {
     #[abi(embed_v0)]
     impl AccountMixinImpl = AccountComponent::AccountMixinImpl<ContractState>;
     #[abi(embed_v0)]
-    impl OutsideExecutionV2Impl =
-        SRC9Component::OutsideExecutionV2Impl<ContractState>;
+    impl OutsideExecutionV2Impl = SRC9Component::OutsideExecutionV2Impl<ContractState>;
 
     // Internal
     impl AccountInternalImpl = AccountComponent::InternalImpl<ContractState>;
@@ -46,12 +44,12 @@ mod Account {
         upgradeable: UpgradeableComponent::Storage,
         // Custom storage for SyncPayment functionality
         fiat_balance: Map<(ContractAddress, felt252), u128>, // (user, currency) => balance
-        token_address: Map<felt252, ContractAddress>, // symbol => token_address
+        token_address: Map<felt252, ContractAddress>,        // symbol => token_address
         default_fiat_currency: felt252,
         liquidity_bridge: ContractAddress,
         initialized: bool,
         public_key: felt252,
-        approved_tokens: Map<felt252, ContractAddress>, // symbol => token_address
+        approved_tokens: Map<felt252, ContractAddress>,       // symbol => token_address
     }
 
     #[event]
@@ -66,6 +64,8 @@ mod Account {
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
         TokenApproved: TokenApproved,
+        FiatDeposit: FiatDeposit,
+        FiatWithdrawal: FiatWithdrawal,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -74,6 +74,21 @@ mod Account {
         pub symbol: felt252,
         pub token_address: ContractAddress,
         pub amount: u128,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct FiatDeposit {
+        pub user: ContractAddress,
+        pub currency: felt252,
+        pub amount: u128,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct FiatWithdrawal {
+        pub account_address: ContractAddress,
+        pub currency: felt252,
+        pub amount: u128,
+        pub recipient: ContractAddress,
     }
 
     #[constructor]
@@ -85,7 +100,6 @@ mod Account {
     //
     // Upgradeable
     //
-
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
@@ -93,7 +107,6 @@ mod Account {
             self.upgradeable.upgrade(new_class_hash);
         }
     }
-
 
     // contract impl
     #[abi(embed_v0)]
@@ -103,7 +116,6 @@ mod Account {
             let caller = get_caller_address();
             let currency = self.default_fiat_currency.read();
             let current_balance = self.fiat_balance.read((caller, currency));
-
             self
                 .fiat_balance
                 .write((caller, currency), current_balance + amount.try_into().unwrap());
@@ -129,13 +141,12 @@ mod Account {
             assert(token_address != 0.try_into().unwrap(), 'Token address cannot be 0');
 
             self.approved_tokens.write(symbol, token_address);
-            
+
             let bridge_address = self.liquidity_bridge.read();
-            
+
             let token_dispatcher = IERC20Dispatcher { contract_address: token_address };
-            
             token_dispatcher.approve(bridge_address, 10000000000000000000);
-            
+
             self.emit(TokenApproved {
                 user: get_caller_address(),
                 symbol,
@@ -159,6 +170,25 @@ mod Account {
         fn get_initialized_status(self: @ContractState) -> bool {
             self.initialized.read()
         }
+
+        // --- New functions for fiat handling ---
+        fn deposit_fiat(ref self: ContractState, currency: felt252, amount: u128) {
+            assert(currency != 0, 'Currency must be provided');
+            assert(amount > 0, 'Amount must be > 0');
+            let caller = get_caller_address();
+            let current_balance = self.fiat_balance.read((caller, currency));
+            self.fiat_balance.write((caller, currency), current_balance + amount);
+            self.emit(FiatDeposit { user: caller, currency, amount });
+        }
+
+        fn withdraw_fiat(ref self: ContractState, currency: felt252, amount: u128, recipient: ContractAddress) {
+            assert(currency != 0, 'Currency must be provided');
+            assert(amount > 0, 'Amount must be > 0');
+            let caller = get_caller_address();
+            let balance = self.fiat_balance.read((caller, currency));
+            assert(balance >= amount, 'Insufficient balance');
+            self.fiat_balance.write((caller, currency), balance - amount);
+            self.emit(FiatWithdrawal { account_address: caller, currency, amount, recipient });
+        }
     }
 }
-
