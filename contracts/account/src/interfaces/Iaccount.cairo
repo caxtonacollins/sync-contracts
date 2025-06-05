@@ -9,4 +9,11 @@ pub trait Iaccount<TContractState> {
     fn get_key_public(self: @TContractState) -> felt252;
     fn get_approved_token(self: @TContractState, symbol: felt252) -> ContractAddress;
     fn get_initialized_status(self: @TContractState) -> bool;
+    fn make_payment(
+        ref self: TContractState,
+        recipient: ContractAddress,
+        currency: felt252,
+        amount: u128,
+        use_liquidity_bridge: bool,
+    ) -> bool;
 }
