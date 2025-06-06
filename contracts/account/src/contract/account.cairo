@@ -19,7 +19,6 @@ mod Account {
     use starknet::{ClassHash, ContractAddress, get_caller_address, get_contract_address};
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
-
     component!(path: AccountComponent, storage: account, event: AccountEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: SRC9Component, storage: src9, event: SRC9Event);
@@ -69,9 +68,7 @@ mod Account {
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
         TokenApproved: TokenApproved,
-        PaymentMade: PaymentMade
-    }
-
+        }
     #[derive(Drop, starknet::Event)]
     pub struct TokenApproved {
         pub user: ContractAddress,
@@ -81,14 +78,6 @@ mod Account {
     }
 
     #[derive(Drop, starknet::Event)]
-    pub struct PaymentMade {
-        pub from: ContractAddress,
-        pub to: ContractAddress,
-        pub currency: felt252,
-        pub amount: u128,
-        pub used_bridge: bool,
-    }
-
     #[constructor]
     fn constructor(ref self: ContractState, public_key: felt252) {
         self.account.initializer(public_key);
@@ -106,7 +95,6 @@ mod Account {
             self.upgradeable.upgrade(new_class_hash);
         }
     }
-
 
     // contract impl
     #[abi(embed_v0)]
@@ -260,6 +248,24 @@ mod Account {
         fn get_initialized_status(self: @ContractState) -> bool {
             self.initialized.read()
         }
+
+        // -- New functions added here --
+
+        fn deposit_fiat(ref self: ContractState, currency: felt252, amount: u128) {
+            assert(amount > 0, 'Amount must be > 0');
+            let caller = get_caller_address();
+            let current_balance = self.fiat_balance.read((caller, currency));
+            self.fiat_balance.write((caller, currency), current_balance + amount);
+            self.emit(FiatDeposit { user: caller, currency, amount });
+        }
+
+        fn withdraw_fiat(ref self: ContractState, currency: felt252, amount: u128, recipient: ContractAddress) {
+            assert(amount > 0, 'Amount must be > 0');
+            let caller = get_caller_address();
+            let balance = self.fiat_balance.read((caller, currency));
+            assert(balance >= amount, 'Insufficient balance');
+            self.fiat_balance.write((caller, currency), balance - amount);
+            self.emit(FiatWithdrawal { account_address: caller, currency, amount, recipient });
+        }
     }
 }
-
