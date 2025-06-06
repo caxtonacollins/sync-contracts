@@ -4,4 +4,10 @@ pub mod contract {
 
 pub mod interfaces {
     pub mod Iaccount;
+    pub mod ILiquidityBridge;
+}
+
+
+pub mod base {
+    pub mod errors;
 }
