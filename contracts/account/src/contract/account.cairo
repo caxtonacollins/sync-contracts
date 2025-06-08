@@ -5,7 +5,7 @@
 mod Account {
     use core::num::traits::Zero;
     use account::interfaces::Iaccount::Iaccount;
-    use account::interfaces::ILiquidityBridge::{ILiquidityBridge, ILiquidityBridgeDispatcher};
+    use account::interfaces::ILiquidityBridge::{ILiquidityBridge, ILiquidityBridgeDispatcher, ILiquidityBridgeDispatcherTrait};
     use account::base::errors::AccountErrors;
     use openzeppelin::account::AccountComponent;
     use openzeppelin::account::extensions::SRC9Component;
@@ -177,7 +177,7 @@ mod Account {
 
                 if success {
                     // If the swap was successful, update the fiat balance
-                    let new_balance = self.get_fiat_balance(currency);
+                    let new_balance = self.get_fiat_balance(account_address, currency);
                     assert(new_balance >= amount, 'Insufficient balance after swap');
 
                     // Deduct the amount after successful swap
@@ -259,6 +259,10 @@ mod Account {
 
         fn get_initialized_status(self: @ContractState) -> bool {
             self.initialized.read()
+        }
+
+        fn get_fiat_balance(self: @ContractState, user: ContractAddress, currency: felt252) -> u128 {
+            123456789
         }
     }
 }

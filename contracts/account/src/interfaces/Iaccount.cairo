@@ -16,4 +16,5 @@ pub trait Iaccount<TContractState> {
         amount: u128,
         use_liquidity_bridge: bool,
     ) -> bool;
+    fn get_fiat_balance(self: @TContractState, user: ContractAddress, currency: felt252) -> u128;
 }
