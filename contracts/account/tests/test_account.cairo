@@ -62,3 +62,82 @@ fn test_approve_token() {
     let approved_token = dispatcher.get_approved_token('STRK');
     assert(approved_token == token_address, 'Invalid approved token');
 }
+
+
+
+
+#[test]
+fn test_deposit_fiat() {
+    let (contract_address, _) = setup();
+    let dispatcher = IaccountDispatcher { contract_address };
+    let currency = 'USD';
+    let amount: u128 = 1000;
+
+    // Initialize the contract
+    start_cheat_caller_address(contract_address, contract_address);
+    dispatcher.initialize(1, 2.try_into().unwrap());
+    
+    // Test deposit
+    dispatcher.deposit_fiat(currency, amount);
+    
+    // Verify balance
+    let balance = dispatcher.get_fiat_balance(contract_address, currency);
+    assert(balance == amount.into(), 'Bal equal to deposited amount');
+    
+    stop_cheat_caller_address(contract_address);
+}
+
+
+
+
+
+
+
+
+fn withdraw_fiat(
+    ref self: ContractState, currency: felt252, amount: u128, recipient: ContractAddress,
+) {
+    self.account.assert_only_self();
+    assert(!amount.is_zero(), AccountErrors::AMOUNT_CANNOT_BE_ZERO);
+    assert(!currency.is_zero(), AccountErrors::CURRENCY_IS_REQUIRED);
+    assert(!recipient.is_zero(), AccountErrors::CANNOT_BE_ADDR_ZERO);
+
+    let account_address = get_contract_address();
+    let current_balance = self.fiat_balance.read((account_address, currency));
+    assert(current_balance >= amount, 'Insufficient balance');
+
+    // Deduct from sender's balance
+    self.fiat_balance.write((account_address, currency), current_balance - amount);
+    
+    // Add to recipient's balance
+    let recipient_balance = self.fiat_balance.read((recipient, currency));
+    self.fiat_balance.write((recipient, currency), recipient_balance + amount);
+
+    self
+        .emit(
+            FiatWithdrawal {
+                account_address,
+                currency,
+                amount: current_balance - amount,
+                recipient,
+            },
+        );
+}
+
+#[test]
+#[should_panic(expected: ('Insufficient balance',))]
+fn test_withdraw_fiat_insufficient_balance() {
+    let (contract_address, _) = setup();
+    let dispatcher = IaccountDispatcher { contract_address };
+    let currency = 'USD';
+    let recipient: ContractAddress = contract_address_const::<'2'>();
+
+    // Initialize the contract
+    start_cheat_caller_address(contract_address, contract_address);
+    dispatcher.initialize(1, 2.try_into().unwrap());
+    
+    // Try to withdraw without depositing first
+    dispatcher.withdraw_fiat(currency, 1000, recipient);
+    
+    stop_cheat_caller_address(contract_address);
+}

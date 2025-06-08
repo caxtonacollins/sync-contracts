@@ -69,7 +69,9 @@ mod Account {
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
         TokenApproved: TokenApproved,
-        PaymentMade: PaymentMade
+        PaymentMade: PaymentMade,
+        FiatDeposit: FiatDeposit,
+        FiatWithdrawal: FiatWithdrawal,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -87,6 +89,22 @@ mod Account {
         pub currency: felt252,
         pub amount: u128,
         pub used_bridge: bool,
+    }
+
+
+    #[derive(Drop, starknet::Event)]
+    pub struct FiatDeposit {
+        pub user: ContractAddress,
+        pub currency: felt252,
+        pub amount: u128,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct FiatWithdrawal {
+        pub account_address: ContractAddress,
+        pub currency: felt252,
+        pub amount: u128,
+        pub recipient: ContractAddress,
     }
 
     #[constructor]
@@ -261,9 +279,56 @@ mod Account {
             self.initialized.read()
         }
 
+        // fn get_fiat_balance(self: @ContractState, user: ContractAddress, currency: felt252) -> u128 {
+        //     123456789
+        // }
+
         fn get_fiat_balance(self: @ContractState, user: ContractAddress, currency: felt252) -> u128 {
-            123456789
+            self.fiat_balance.read((user, currency))
         }
+  
+
+
+
+    fn deposit_fiat(ref self: ContractState, currency: felt252, amount: u128) {
+        self.account.assert_only_self();
+        assert(!amount.is_zero(), AccountErrors::AMOUNT_CANNOT_BE_ZERO);
+        assert(!currency.is_zero(), AccountErrors::CURRENCY_IS_REQUIRED);
+        let account_address = get_contract_address();
+        let current_balance = self.fiat_balance.read((account_address, currency));
+        self.fiat_balance.write((account_address, currency), current_balance + amount);
+        self
+            .emit(
+                FiatDeposit {
+                    user: account_address, currency, amount: current_balance + amount,
+                },
+            );
     }
+
+    fn withdraw_fiat(
+        ref self: ContractState, currency: felt252, amount: u128, recipient: ContractAddress,
+    ) {
+        self.account.assert_only_self();
+        assert(!amount.is_zero(), AccountErrors::AMOUNT_CANNOT_BE_ZERO);
+        assert(!currency.is_zero(), AccountErrors::CURRENCY_IS_REQUIRED);
+        assert(!recipient.is_zero(), AccountErrors::CANNOT_BE_ADDR_ZERO);
+
+        let account_address = get_contract_address();
+        let current_balance = self.fiat_balance.read((account_address, currency));
+        assert(current_balance >= amount, 'Insufficient balance');
+
+        self.fiat_balance.write((account_address, currency), current_balance - amount);
+        self
+            .emit(
+                FiatWithdrawal {
+                    account_address,
+                    currency,
+                    amount: current_balance - amount,
+                    recipient: recipient,
+                },
+            );
+    }
+
+}
 }
 
