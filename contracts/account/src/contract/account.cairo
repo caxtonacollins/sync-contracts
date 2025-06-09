@@ -3,13 +3,16 @@
 
 #[starknet::contract(account)]
 mod Account {
-    use core::num::traits::Zero;
-    use account::interfaces::Iaccount::Iaccount;
-    use account::interfaces::ILiquidityBridge::{ILiquidityBridge, ILiquidityBridgeDispatcher, ILiquidityBridgeDispatcherTrait};
     use account::base::errors::AccountErrors;
+    use account::interfaces::ILiquidityBridge::{
+        ILiquidityBridge, ILiquidityBridgeDispatcher, ILiquidityBridgeDispatcherTrait,
+    };
+    use account::interfaces::Iaccount::Iaccount;
+    use core::num::traits::Zero;
     use openzeppelin::account::AccountComponent;
     use openzeppelin::account::extensions::SRC9Component;
     use openzeppelin::introspection::src5::SRC5Component;
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use starknet::storage::{
@@ -17,7 +20,6 @@ mod Account {
         StoragePointerWriteAccess,
     };
     use starknet::{ClassHash, ContractAddress, get_caller_address, get_contract_address};
-    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
 
     component!(path: AccountComponent, storage: account, event: AccountEvent);
@@ -54,7 +56,7 @@ mod Account {
         liquidity_bridge: ContractAddress,
         initialized: bool,
         public_key: felt252,
-        approved_tokens: Map<felt252, ContractAddress>, // symbol => token_address
+        approved_tokens: Map<felt252, ContractAddress> // symbol => token_address
     }
 
     #[event]
@@ -228,7 +230,7 @@ mod Account {
         }
 
         fn initialize(
-            ref self: ContractState, public_key: felt252, liquidity_bridge: ContractAddress
+            ref self: ContractState, public_key: felt252, liquidity_bridge: ContractAddress,
         ) {
             assert(!self.initialized.read(), 'Already initialized');
             self.public_key.write(public_key);
@@ -240,7 +242,8 @@ mod Account {
             self.account.assert_only_self();
             assert(self.initialized.read(), 'Not initialized');
             assert(
-                self.approved_tokens.read(symbol) == 0.try_into().unwrap(), 'Token already approved'
+                self.approved_tokens.read(symbol) == 0.try_into().unwrap(),
+                'Token already approved',
             );
             assert(token_address != 0.try_into().unwrap(), 'Token address cannot be 0');
 
@@ -259,7 +262,7 @@ mod Account {
                         symbol,
                         token_address,
                         amount: 10000000000000000000,
-                    }
+                    },
                 );
         }
 
@@ -279,56 +282,56 @@ mod Account {
             self.initialized.read()
         }
 
-        // fn get_fiat_balance(self: @ContractState, user: ContractAddress, currency: felt252) -> u128 {
+        // fn get_fiat_balance(self: @ContractState, user: ContractAddress, currency: felt252) ->
+        // u128 {
         //     123456789
         // }
 
-        fn get_fiat_balance(self: @ContractState, user: ContractAddress, currency: felt252) -> u128 {
+        fn get_fiat_balance(
+            self: @ContractState, user: ContractAddress, currency: felt252,
+        ) -> u128 {
             self.fiat_balance.read((user, currency))
         }
-  
 
 
+        fn deposit_fiat(ref self: ContractState, currency: felt252, amount: u128) {
+            self.account.assert_only_self();
+            assert(!amount.is_zero(), AccountErrors::AMOUNT_CANNOT_BE_ZERO);
+            assert(!currency.is_zero(), AccountErrors::CURRENCY_IS_REQUIRED);
+            let account_address = get_contract_address();
+            let current_balance = self.fiat_balance.read((account_address, currency));
+            self.fiat_balance.write((account_address, currency), current_balance + amount);
+            self
+                .emit(
+                    FiatDeposit {
+                        user: account_address, currency, amount: current_balance + amount,
+                    },
+                );
+        }
 
-    fn deposit_fiat(ref self: ContractState, currency: felt252, amount: u128) {
-        self.account.assert_only_self();
-        assert(!amount.is_zero(), AccountErrors::AMOUNT_CANNOT_BE_ZERO);
-        assert(!currency.is_zero(), AccountErrors::CURRENCY_IS_REQUIRED);
-        let account_address = get_contract_address();
-        let current_balance = self.fiat_balance.read((account_address, currency));
-        self.fiat_balance.write((account_address, currency), current_balance + amount);
-        self
-            .emit(
-                FiatDeposit {
-                    user: account_address, currency, amount: current_balance + amount,
-                },
-            );
+        fn withdraw_fiat(
+            ref self: ContractState, currency: felt252, amount: u128, recipient: ContractAddress,
+        ) {
+            self.account.assert_only_self();
+            assert(!amount.is_zero(), AccountErrors::AMOUNT_CANNOT_BE_ZERO);
+            assert(!currency.is_zero(), AccountErrors::CURRENCY_IS_REQUIRED);
+            assert(!recipient.is_zero(), AccountErrors::CANNOT_BE_ADDR_ZERO);
+
+            let account_address = get_contract_address();
+            let current_balance = self.fiat_balance.read((account_address, currency));
+            assert(current_balance >= amount, 'Insufficient balance');
+
+            self.fiat_balance.write((account_address, currency), current_balance - amount);
+            self
+                .emit(
+                    FiatWithdrawal {
+                        account_address,
+                        currency,
+                        amount: current_balance - amount,
+                        recipient: recipient,
+                    },
+                );
+        }
     }
-
-    fn withdraw_fiat(
-        ref self: ContractState, currency: felt252, amount: u128, recipient: ContractAddress,
-    ) {
-        self.account.assert_only_self();
-        assert(!amount.is_zero(), AccountErrors::AMOUNT_CANNOT_BE_ZERO);
-        assert(!currency.is_zero(), AccountErrors::CURRENCY_IS_REQUIRED);
-        assert(!recipient.is_zero(), AccountErrors::CANNOT_BE_ADDR_ZERO);
-
-        let account_address = get_contract_address();
-        let current_balance = self.fiat_balance.read((account_address, currency));
-        assert(current_balance >= amount, 'Insufficient balance');
-
-        self.fiat_balance.write((account_address, currency), current_balance - amount);
-        self
-            .emit(
-                FiatWithdrawal {
-                    account_address,
-                    currency,
-                    amount: current_balance - amount,
-                    recipient: recipient,
-                },
-            );
-    }
-
-}
 }
 

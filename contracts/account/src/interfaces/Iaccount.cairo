@@ -18,5 +18,7 @@ pub trait Iaccount<TContractState> {
     ) -> bool;
     fn get_fiat_balance(self: @TContractState, user: ContractAddress, currency: felt252) -> u128;
     fn deposit_fiat(ref self: TContractState, currency: felt252, amount: u128);
-    fn withdraw_fiat(ref self: TContractState, currency: felt252, amount: u128, recipient: ContractAddress);
+    fn withdraw_fiat(
+        ref self: TContractState, currency: felt252, amount: u128, recipient: ContractAddress,
+    );
 }
