@@ -27,14 +27,10 @@ Step 1:
 2. Clone the forked repo to your local machine
 
 ```bash
-git clone https://github.com/your-user-name/auto-swap
+git clone https://github.com/your-user-name/sync-contracts
 ```
 
 3. Setup contract:
-
-```
-cd contracts
-```
 
 // Install asdf scarb and starknet foundry:
 
